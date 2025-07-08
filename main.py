@@ -1,5 +1,5 @@
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import requests
@@ -9,6 +9,7 @@ import uuid
 
 app = FastAPI()
 
+# Token da API Replicate (usado como variável de ambiente)
 REPLICATE_API_TOKEN = os.environ.get("REPLICATE_API_TOKEN")
 REPLICATE_MODEL_VERSION = "a9758cbf0aa29e34b39e7cf9c0647f6c945c8b9f3c69e4f29dfb3d4e4c2121c1"
 
@@ -23,7 +24,7 @@ class PromptRequest(BaseModel):
 def generate_video(request: PromptRequest):
     frame_paths = []
 
-    for i in range(request.frames):
+    for _ in range(request.frames):
         response = requests.post(
             "https://api.replicate.com/v1/predictions",
             headers={
@@ -53,7 +54,10 @@ def generate_video(request: PromptRequest):
     ffmpeg_cmd = ["ffmpeg", "-y"]
     for frame in frame_paths:
         ffmpeg_cmd.extend(["-loop", "1", "-t", "1", "-i", frame])
-    filter_complex = f"[0:v]" + "".join([f"[{i}:v]" for i in range(1, request.frames)]) + f"concat=n={request.frames}:v=1:a=0[outv]"
+
+    filter_complex = "".join([f"[{i}:v]" for i in range(len(frame_paths))])
+    filter_complex = f"{filter_complex}concat=n={len(frame_paths)}:v=1:a=0[outv]"
+
     ffmpeg_cmd.extend(["-filter_complex", filter_complex, "-map", "[outv]", video_path])
 
     try:

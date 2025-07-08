@@ -1,33 +1,29 @@
 
-# FastAPI + Replicate + FFmpeg (Deploy no Render)
+# API de Vídeo com FastAPI + FFmpeg + Replicate
 
-## Como usar:
+## Como usar
 
-1. Crie conta em: https://render.com
-2. Crie um novo projeto do tipo **Web Service**
-3. Faça upload ou conecte este repositório
-4. Defina a variável de ambiente:
-   - `REPLICATE_API_TOKEN` com sua chave da API
+1. Faça deploy no Render.com com esse projeto.
+2. Configure a variável de ambiente:
+   - `REPLICATE_API_TOKEN` com sua chave da API Replicate.
+3. Use o endpoint POST `/generate-video/` com o corpo:
 
-O serviço irá:
-- Receber um prompt de texto
-- Gerar imagens com IA
-- Juntar em um vídeo (MP4)
-- Retornar a URL do vídeo para consumo via `/media/`
-
-Exemplo de uso:
-
-POST `/generate-video/`
 ```json
 {
-  "prompt": "a city of robots at night",
+  "prompt": "a futuristic city at night",
   "frames": 4
 }
 ```
 
-Retorno:
+4. O retorno será:
+
 ```json
 {
-  "video_url": "/media/video_xxx.mp4"
+  "video_url": "/media/video_xyz.mp4"
 }
+```
+
+5. Acesse no navegador:
+```
+https://seu-app.onrender.com/media/video_xyz.mp4
 ```
