@@ -1,7 +1,7 @@
 
 services:
   - type: web
-    name: fastapi-video-gen
+    name: fastapi-video-gen-frontend
     env: python
     plan: free
     buildCommand: "pip install -r requirements.txt"
