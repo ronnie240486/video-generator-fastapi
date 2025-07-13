@@ -1,6 +1,6 @@
 
 from fastapi import FastAPI
-from routers import amazon_scraper
+from .routers import amazon_scraper
 
 app = FastAPI()
 
