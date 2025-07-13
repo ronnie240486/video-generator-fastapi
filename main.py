@@ -118,6 +118,131 @@ def usuario_atual(user: User = Depends(get_current_user)):
 def raiz():
     return {"status": "API está rodando!"}
 
+
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
+from sqlalchemy.orm import Session
+
+@app.post("/alerta")
+def criar_alerta(produto: str, preco_alvo: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    alerta = Alerta(user_id=user.id, produto=produto, preco_alvo=preco_alvo)
+    db.add(alerta)
+    db.commit()
+
+    # Enviar e-mail simulando alerta imediato
+    if "SENDGRID_API_KEY" in os.environ:
+        try:
+            message = Mail(
+                from_email="alerta@suaapp.com",
+                to_emails=user.username,  # deve ser um e-mail válido
+                subject=f"📉 Alerta de preço criado para {produto}",
+                html_content=f"<p>Você será notificado quando o preço cair abaixo de <strong>{preco_alvo}</strong>.</p>"
+            )
+            sg = SendGridAPIClient(os.environ["SENDGRID_API_KEY"])
+            sg.send(message)
+        except Exception as e:
+            print("Erro ao enviar email:", e)
+
+    return {"msg": f"Alerta criado para {produto} com alvo R$ {preco_alvo}"}
+
+
+import requests
+
+@app.get("/verificar-alertas")
+def verificar_alertas(db: Session = Depends(get_db)):
+    alertas = db.query(Alerta).all()
+    enviados = []
+
+    for alerta in alertas:
+        # Buscar produto no Mercado Livre
+        url = f"https://api.mercadolibre.com/sites/MLB/search?q={alerta.produto}&limit=1"
+        res = requests.get(url)
+        if res.status_code != 200:
+            continue
+        resultados = res.json().get("results", [])
+        if not resultados:
+            continue
+        preco_atual = float(resultados[0]["price"])
+        preco_desejado = float(alerta.preco_alvo.replace(",", ".").replace("R$", "").strip())
+
+        if preco_atual <= preco_desejado:
+            # Enviar email
+            try:
+                if "SENDGRID_API_KEY" in os.environ:
+                    user = db.query(User).filter(User.id == alerta.user_id).first()
+                    message = Mail(
+                        from_email="alerta@suaapp.com",
+                        to_emails=user.username,
+                        subject=f"📉 Oferta encontrada: {alerta.produto}",
+                        html_content=f"<p>O produto <strong>{alerta.produto}</strong> está por <strong>R$ {preco_atual:.2f}</strong> (abaixo de R$ {preco_desejado:.2f}).</p><p><a href='{resultados[0]['permalink']}'>Ver no Mercado Livre</a></p>"
+                    )
+                    sg = SendGridAPIClient(os.environ["SENDGRID_API_KEY"])
+                    sg.send(message)
+                    enviados.append(alerta.produto)
+            except Exception as e:
+                print("Erro ao enviar alerta:", e)
+
+    return {"alertas_enviados": enviados}
+
+
+@app.get("/me/alertas")
+def listar_alertas(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    alertas = db.query(Alerta).filter(Alerta.user_id == user.id).all()
+    return [{"id": a.id, "produto": a.produto, "preco_alvo": a.preco_alvo} for a in alertas]
+
+@app.delete("/me/alertas/{id}")
+def deletar_alerta(id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    alerta = db.query(Alerta).filter(Alerta.id == id, Alerta.user_id == user.id).first()
+    if not alerta:
+        raise HTTPException(status_code=404, detail="Alerta não encontrado")
+    db.delete(alerta)
+    db.commit()
+    return {"msg": "Alerta removido com sucesso"}
+
+@app.post("/me/favoritos")
+def adicionar_favorito(produto: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    favorito = Favorito(user_id=user.id, nome=produto, link="", preco="")
+    db.add(favorito)
+    db.commit()
+    return {"msg": f"{produto} adicionado aos favoritos"}
+
+@app.get("/me/favoritos")
+def listar_favoritos(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    favoritos = db.query(Favorito).filter(Favorito.user_id == user.id).all()
+    return [{"id": f.id, "nome": f.nome} for f in favoritos]
+
+@app.delete("/me/favoritos/{id}")
+def deletar_favorito(id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    fav = db.query(Favorito).filter(Favorito.id == id, Favorito.user_id == user.id).first()
+    if not fav:
+        raise HTTPException(status_code=404, detail="Favorito não encontrado")
+    db.delete(fav)
+    db.commit()
+    return {"msg": "Favorito removido com sucesso"}
+
+@app.get("/me/dashboard")
+def dashboard(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    total_alertas = db.query(Alerta).filter(Alerta.user_id == user.id).count()
+    total_favoritos = db.query(Favorito).filter(Favorito.user_id == user.id).count()
+    ultimo_alerta = db.query(Alerta).filter(Alerta.user_id == user.id).order_by(Alerta.id.desc()).first()
+    produto_freq = db.query(Alerta.produto).filter(Alerta.user_id == user.id).all()
+    contagem_produtos = {}
+    for p in produto_freq:
+        contagem_produtos[p[0]] = contagem_produtos.get(p[0], 0) + 1
+
+    return {
+        "total_alertas": total_alertas,
+        "total_favoritos": total_favoritos,
+        "ultimo_alerta": {
+            "produto": ultimo_alerta.produto,
+            "preco": ultimo_alerta.preco_alvo
+        } if ultimo_alerta else None,
+        "produtos_mais_monitorados": contagem_produtos
+    }
+
+from routers import amazon_scraper
+app.include_router(amazon_scraper.router)
+
 # Inicialização
 if __name__ == "__main__":
     Base.metadata.create_all(bind=engine)
