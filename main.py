@@ -114,6 +114,10 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
 def usuario_atual(user: User = Depends(get_current_user)):
     return {"usuario": user.username}
 
+@app.get("/")
+def raiz():
+    return {"status": "API está rodando!"}
+
 # Inicialização
 if __name__ == "__main__":
     Base.metadata.create_all(bind=engine)
