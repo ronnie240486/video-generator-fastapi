@@ -1,7 +1,7 @@
 fastapi
 uvicorn
-python-jose[cryptography]
-passlib[bcrypt]
-sqlalchemy
+requests
+beautifulsoup4
 python-multipart
-sendgrid
+passlib[bcrypt]
+python-jose
